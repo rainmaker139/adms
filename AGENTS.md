@@ -13,3 +13,19 @@
 - 요청받기 전에는 실제 업무 화면을 만들지 않는다.
 - 변경 완료 시 `npm run build`와 `npm run build:single`을 실행하고 단일 HTML 검사 실패를 수정한다. dist에 추가 파일이 없어야 하며 외부 JS/CSS/CDN/네트워크 리소스 의존성이 없어야 한다.
 - 가능한 경우 최종 HTML을 file://로 열어 메뉴, 차트, 상호작용을 검증한다.
+
+## ADMS Product Source of Truth
+
+The authoritative product specification for this project is:
+
+`docs/ADMS_PRD_v1.md`
+
+Rules:
+
+- Always read and follow `docs/ADMS_PRD_v1.md` before making product, IA, workflow, data-model, or UI decisions.
+- If the existing prototype or code conflicts with the PRD, the PRD takes precedence.
+- Do not interpret the PRD to preserve the current prototype. Modify the prototype to conform to the PRD.
+- Do not remove or simplify PRD-defined features merely because this is a prototype.
+- Features that require backend integration may use mock data and mock interactions, but their workflow, states, and purpose must remain visible.
+- Do not invent detailed specifications for external APIs, banking interfaces, POS-specific protocols, or institutional policies that the PRD leaves undefined. Keep those areas generic and extensible.
+- Preserve the existing standalone demo requirement and ensure the final build continues to work as a single offline HTML file.

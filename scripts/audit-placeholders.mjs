@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict'
+import { pathToFileURL } from 'node:url'
+import { writeFile } from 'node:fs/promises'
+import { seed } from '../src/data/seed.ts'
+import { DATA_KEY } from '../src/state/platformStore.ts'
+import { SESSION_KEY } from '../src/state/session.ts'
+import { availableBusinesses } from '../src/access/policy.ts'
+const {chromium}=await import(pathToFileURL(process.argv[2]).href),browser=await chromium.launch({channel:'msedge',headless:true}),file=new URL('../dist/adms-demo.html',import.meta.url).href,report=[]
+try{for(const role of seed.roles){
+ const data=structuredClone(seed),base=data.accounts.find(a=>a.id===(role.family==='system'?'account-admin':role.family==='at'?'account-at':role.family==='mart'?'account-mart':'account-assn'))
+ base.roleId=role.id;if(role.family==='branch')base.organizationId='gyeonggi';if(role.scope==='stores')base.storeAccess=['main','gangseo'];const businesses=availableBusinesses(base,data)
+ const context=await browser.newContext({offline:true});await context.addInitScript(({data,dataKey,sessionKey,session})=>{localStorage.setItem(dataKey,JSON.stringify({version:2,data}));localStorage.setItem(sessionKey,JSON.stringify(session))},{data,dataKey:DATA_KEY,sessionKey:SESSION_KEY,session:{accountId:base.id,businessId:businesses[0]?.id||''}})
+ const page=await context.newPage(),entries=new Map();await page.goto(file);await page.locator('main h1').waitFor();for(const business of businesses){await page.getByLabel('선택 사업',{exact:true}).selectOption(business.id);await page.waitForTimeout(150);const links=await page.getByRole('navigation',{name:'주 메뉴'}).locator('a').evaluateAll(as=>as.filter(a=>a.getAttribute('href')!=='#/home').map(a=>({hash:a.getAttribute('href'),name:a.textContent.trim()})));for(const link of links){if(entries.has(link.hash))continue;await page.evaluate(hash=>location.hash=hash,link.hash);await page.waitForTimeout(150);assert.ok(!(await page.locator('main').innerText()).includes('접근할 수 없는'));entries.set(link.hash,{...link,placeholder:await page.locator('.placeholder-panel').count()>0})}}
+ const placeholders=[...entries.values()].filter(e=>e.placeholder);report.push({role:role.name,checked:entries.size,placeholders:placeholders.map(p=>({name:p.name,program:p.hash.split('/').at(-1)}))});console.log(`${role.name}: ${entries.size}개 메뉴 확인 / Placeholder ${placeholders.length}개`);await context.close()
+}}finally{await browser.close()}
+const text=['# Role별 Placeholder 점검','',`- 기준: ${new Date().toISOString().slice(0,10)} / 기본 Mock 프로그램·권한·사업 매핑`,`- Edge file:// offline에서 Role별 연결 사업의 Sidebar 메뉴를 모두 순회해 generic 준비 화면(placeholder-panel)을 확인했다.`,`- 지회·마트 부/일반 관리자는 테스트 세션으로 Role·조직·점포 범위를 구성했다. 실제 로그인 계정은 추가하지 않았다.`,`- 홈과 접근 거부 화면은 Placeholder 목록에 포함하지 않는다. 관리자 프로그램 마스터에서 다른 Role의 미구현 프로그램을 조회하는 경우는 Sidebar 점검과 구분한다.`,'',...report.flatMap(r=>[`## ${r.role}`,``,`점검 메뉴 ${r.checked}개 · Placeholder ${r.placeholders.length}개`,``,...(r.placeholders.length?r.placeholders.map(p=>`- ${p.name} (${p.program})`):['- 없음']),``]),'## 상세 고도화 예정 영역','','- 협회 종합통계 및 홈페이지 CMS(게시판·게시물, 배너·팝업, 메뉴·콘텐츠, 회원가입 안내)는 기존 제한된 Mock 화면을 유지했다. generic Placeholder는 아니지만 상세 고도화 대상이다.','- 외부 연동 관리화면은 상태/처리/오류 이력과 Mock 재처리·재검증을 제공한다. 실제 Endpoint·인증·은행 전문·계약은 TBD다.','- 임의로 등록한 신규 프로그램은 연결된 전용 화면이 없으면 generic 준비 화면으로 표시될 수 있다.',''].join('\n')
+await writeFile('docs/PLACEHOLDER_STATUS.md',text);await writeFile('node_modules/.tmp/placeholder-audit.json',JSON.stringify(report,null,2))
